@@ -153,19 +153,46 @@ $("#calcBtn")?.addEventListener("click", () => {
   });
   const assembles = $$("#tbody .assemble").map(x => Math.max(0, parseInt(x.value, 10) || 0));
 
+  // ループ開始前に追加
+  const desiredArrives = [];  // 目標着のログ
+
   // 行軍1（集＝base, 着＝集+集結+移動）
   let depart = normalize3600(base);
   let arrive = normalize3600(depart + assembles[0] + travels[0]);
   result.appendChild(li(`${names[0]}: 集 ${formatMinSec(depart)} → 着 ${formatMinSec(arrive)}`));
 
+  // 行軍1の「目標着」は“通常着”そのもの
+  desiredArrives[0] = arrive;
+  
   // 行軍2以降
   for (let i=1;i<names.length;i++){
     const desiredArrive = normalize3600(arrive + gaps[i]); // 前着 + 間隔(0..30)
+    desiredArrives[i] = desiredArrive;
     depart = normalize3600(desiredArrive - assembles[i] - travels[i]);
     arrive = normalize3600(depart + assembles[i] + travels[i]);
     result.appendChild(li(`${names[i]}: 集 ${formatMinSec(depart)} → 着 ${formatMinSec(arrive)}`));
   }
-});
+
+// === リカバリ表示（集結5分の行すべてを「1分」で再計算した集） ===
+{
+  const RECOVER = 60;   // 1分
+  const FIVE    = 300;  // 5分
+  let printedHeader = false;
+
+  for (let i = 0; i < names.length; i++) { // 行軍1も対象なら i = 0 に
+    if (assembles[i] === FIVE) {
+      const desiredArrive = desiredArrives[i];
+      if (desiredArrive == null) continue; // 念のためのガード
+
+      const recoverAssemble = normalize3600(desiredArrive - RECOVER - travels[i]);
+      if (!printedHeader) {
+        result.appendChild(li(`リカバリ1分集結`));
+        printedHeader = true;
+      }
+      result.appendChild(li(`${names[i]} 集 ${formatMinSec(recoverAssemble)}`));
+    }
+  }
+}});
 
 $("#copyBtn")?.addEventListener("click", async () => {
   const resultItems = $$("#result li");
