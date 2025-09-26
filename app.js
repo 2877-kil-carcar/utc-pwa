@@ -1,19 +1,20 @@
 // ==============================
-// UTC 集結時間ツール (PWA) - app.js
-// 入力/表示は「分:秒 (MM:SS)」。
-// ラリー間隔＝「着弾間隔」。時刻は 0..3599 秒（1時間分）で循環（ラップ）させる版。
+// 集結くん (PWA) - v0.4
+// ① 集結時刻: 分/秒プルダウン
+// ② 行軍数: 1〜10プルダウン
+// ③ 行軍数デフォルト=2
+// ④ 行軍1は着弾間隔なし
+// ⑤ ボタン文言「行追加」→「行軍数変更」
 // ==============================
 
-// ====== （任意）簡易パスコードロック ======
-const PASSCODE = "kil"; // 例: "20250917"
+// ====== （任意）簡易パスコードロック（そのまま） ======
+const PASSCODE = "kil";
 const LOCK_KEY = "utc-pwa-unlocked";
-
 function setupLock() {
   const lock = document.getElementById("lock");
   if (!lock) return;
   if (!PASSCODE) return;
   if (localStorage.getItem(LOCK_KEY) === "1") return;
-
   lock.classList.remove("hidden");
   const btn = document.getElementById("unlockBtn");
   const input = document.getElementById("passcode");
@@ -35,25 +36,8 @@ setupLock();
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 const pad2 = (n) => String(n).padStart(2, "0");
+const normalize3600 = (sec) => ((sec % 3600) + 3600) % 3600;
 
-// 0..3599 に正規化（前周/次周も折り返す）
-function normalize3600(sec) {
-  return ((sec % 3600) + 3600) % 3600;
-}
-
-// "MM:SS" → 総秒数（0..3599想定だが 0..3599 以外でも受けておき正規化で処理）
-function parseMinSec(str) {
-  const m = (str || "").trim().match(/^(\d{1,2}):(\d{2})$/); // 入力は 00..59:00..59 を推奨
-  if (!m) return null;
-  const min = parseInt(m[1], 10);
-  const sec = parseInt(m[2], 10);
-  if (Number.isNaN(min) || Number.isNaN(sec)) return null;
-  if (min < 0 || min > 59) return null;
-  if (sec < 0 || sec > 59) return null;
-  return min * 60 + sec;
-}
-
-// 総秒数 → "MM:SS UTC"（常に 00..59:00..59 にラップ）
 function formatMinSec(totalSec) {
   const s = normalize3600(Math.floor(totalSec));
   const min = Math.floor(s / 60);
@@ -61,132 +45,152 @@ function formatMinSec(totalSec) {
   return `${pad2(min)}:${pad2(sec)}`;
 }
 
-// 現在のUTC「分:秒」
-function nowUtcMinSec() {
+function nowUtcMinSecVals(){
   const d = new Date();
-  return `${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}`;
+  return { m: d.getUTCMinutes(), s: d.getUTCSeconds() };
+}
+
+// ====== 「1行軍集結時刻」プルダウン生成 ======
+function fillZeroTo59(selectEl, selectedVal){
+  selectEl.innerHTML = "";
+  for (let i=0;i<=59;i++){
+    const opt = document.createElement("option");
+    opt.value = i.toString();
+    opt.textContent = pad2(i);
+    if (i === selectedVal) opt.selected = true;
+    selectEl.appendChild(opt);
+  }
 }
 
 // ====== 行軍テーブル ======
 const tbody = $("#tbody");
 
-function buildRows(n) {
+function gapOptionsHTML(defaultVal=0){
+  let html = "";
+  for (let i=0;i<=30;i++){
+    html += `<option value="${i}" ${i===defaultVal?'selected':''}>${i}</option>`;
+  }
+  return html;
+}
+function assembleOptionsHTML(defaultVal=300){
+  return `
+    <option value="60" ${defaultVal===60?'selected':''}>1分</option>
+    <option value="300" ${defaultVal===300?'selected':''}>5分</option>
+  `;
+}
+
+function buildRows(n){
   if (!tbody) return;
   tbody.innerHTML = "";
-  const count = Math.max(1, Math.min(100, n || 1));
-  for (let i = 1; i <= count; i++) {
+  const count = Math.max(1, Math.min(10, n||1)); // 1..10
+  for (let i=1;i<=count;i++){
     const tr = document.createElement("tr");
+    const gapCell = (i===1)
+      ? `<td>-</td>` // ④ 行軍1は間隔なし
+      : `<td><select class="gap" title="前の着弾からの間隔(秒)">${gapOptionsHTML(0)}</select></td>`;
     tr.innerHTML = `
       <td>${i}</td>
       <td><input type="text" class="name" value="行軍${i}"></td>
-      <td><input type="number" class="gap"    min="0" step="1" value="${i === 1 ? 0 : 60}" title="着弾間隔（前の着弾から次の着弾までの秒）"></td>
-      <td><input type="number" class="travel" min="0" step="1" value="${i === 1 ? 0 : 0}"  title="目的地までの移動時間（秒）"></td>
+      ${gapCell}
+      <td><input type="number" class="travel" min="0" step="1" value="0" title="目的地までの移動時間（秒）"></td>
+      <td><select class="assemble" title="集結時間">${assembleOptionsHTML(300)}</select></td>
     `;
     tbody.appendChild(tr);
   }
 }
 
-// 初期行生成
-(function initRows() {
+// ====== 初期化 ======
+(function init() {
+  // 集結時刻 MM:SS プルダウン
+  const startMin = $("#startMin");
+  const startSec = $("#startSec");
+  const now = nowUtcMinSecVals();
+  fillZeroTo59(startMin, now.m);
+  fillZeroTo59(startSec, now.s);
+
+  // 行軍数（1..10）
   const marchCountEl = $("#marchCount");
-  const initial = marchCountEl ? parseInt(marchCountEl.value, 10) || 3 : 3;
+  const initial = parseInt(marchCountEl.value, 10) || 2; // ③ デフォルト2
   buildRows(initial);
 })();
 
-// ====== イベント配線 ======
-const applyCountBtn = $("#applyCountBtn");
-if (applyCountBtn) {
-  applyCountBtn.addEventListener("click", () => {
-    const marchCountEl = $("#marchCount");
-    const n = Math.max(1, Math.min(100, parseInt(marchCountEl.value, 10) || 1));
-    buildRows(n);
+// ====== イベント ======
+$("#applyCountBtn")?.addEventListener("click", () => {
+  const n = Math.max(1, Math.min(10, parseInt($("#marchCount").value, 10) || 1));
+  buildRows(n);
+});
+
+$("#nowUtcBtn")?.addEventListener("click", () => {
+  const now = nowUtcMinSecVals();
+  $("#startMin").value = now.m.toString();
+  $("#startSec").value = now.s.toString();
+});
+
+$("#calcBtn")?.addEventListener("click", () => {
+  const result = $("#result");
+  if (!result) return;
+  result.innerHTML = "";
+
+  // MM:SS を総秒に
+  const base = (() => {
+    const m = parseInt($("#startMin").value, 10);
+    const s = parseInt($("#startSec").value, 10);
+    if (Number.isNaN(m) || Number.isNaN(s)) return null;
+    if (m<0||m>59||s<0||s>59) return null;
+    return m*60 + s;
+  })();
+  if (base == null){
+    result.appendChild(li("1行軍集結時刻が不正です"));
+    return;
+  }
+
+  const names   = $$("#tbody .name").map(x => (x.value || "").trim() || "行軍");
+  const travels = $$("#tbody .travel").map(x => Math.max(0, parseInt(x.value, 10) || 0));
+  const gaps    = $$("#tbody tr").map((row, idx) => {
+    if (idx===0) return 0; // ④ 行軍1は間隔なし
+    const sel = row.querySelector(".gap");
+    return Math.max(0, parseInt(sel?.value || "0", 10) || 0);
   });
-}
+  const assembles = $$("#tbody .assemble").map(x => Math.max(0, parseInt(x.value, 10) || 0));
 
-const fillPresetBtn = $("#fillPresetBtn");
-if (fillPresetBtn) {
-  fillPresetBtn.addEventListener("click", () => {
-    const presetEl = $("#preset");
-    const secs = parseInt(presetEl.value, 10) || 0;
-    // プリセットは「着弾間隔」に適用（2行目以降）
-    const gaps = $$("#tbody .gap");
-    gaps.forEach((el, idx) => { if (idx > 0) el.value = secs; });
-  });
-}
+  // 行軍1（集＝base, 着＝集+集結+移動）
+  let depart = normalize3600(base);
+  let arrive = normalize3600(depart + assembles[0] + travels[0]);
+  result.appendChild(li(`${names[0]}: 集 ${formatMinSec(depart)} → 着 ${formatMinSec(arrive)}`));
 
-const nowUtcBtn = $("#nowUtcBtn");
-if (nowUtcBtn) {
-  nowUtcBtn.addEventListener("click", () => {
-    const startEl = $("#startUtc");
-    if (startEl) startEl.value = nowUtcMinSec();
-  });
-}
+  // 行軍2以降
+  for (let i=1;i<names.length;i++){
+    const desiredArrive = normalize3600(arrive + gaps[i]); // 前着 + 間隔(0..30)
+    depart = normalize3600(desiredArrive - assembles[i] - travels[i]);
+    arrive = normalize3600(depart + assembles[i] + travels[i]);
+    result.appendChild(li(`${names[i]}: 集 ${formatMinSec(depart)} → 着 ${formatMinSec(arrive)}`));
+  }
+});
 
-const calcBtn = $("#calcBtn");
-if (calcBtn) {
-  calcBtn.addEventListener("click", () => {
-    const result = $("#result");
-    if (!result) return;
-
-    const startEl = $("#startUtc");
-    const base = parseMinSec(startEl ? startEl.value : "");
-    result.innerHTML = "";
-
-    if (base == null) {
-      result.innerHTML = `<li>開始時刻が不正です（例: 12:30）</li>`;
-      return;
+$("#copyBtn")?.addEventListener("click", async () => {
+  const resultItems = $$("#result li");
+  const copyMsg = $("#copyMsg");
+  if (!resultItems.length) {
+    if (copyMsg) copyMsg.textContent = "コピー対象がありません";
+    return;
+  }
+  const lines = resultItems.map(el => el.textContent).join("\\n");
+  try {
+    await navigator.clipboard.writeText(lines);
+    if (copyMsg) {
+      copyMsg.textContent = "コピーしました";
+      setTimeout(() => (copyMsg.textContent = ""), 1500);
     }
+  } catch {
+    if (copyMsg) copyMsg.textContent = "クリップボードに書き込めませんでした";
+  }
+});
 
-    const names   = $$("#tbody .name").map(x => (x.value || "").trim() || "行軍");
-    const gaps    = $$("#tbody .gap").map(x => Math.max(0, parseInt(x.value, 10) || 0));      // 着弾間隔
-    const travels = $$("#tbody .travel").map(x => Math.max(0, parseInt(x.value, 10) || 0));   // 移動秒
+function li(text){ const el=document.createElement("li"); el.textContent=text; return el; }
 
-    // 行軍1：出発=開始、着弾=出発+移動（すべてmod 3600）
-    let depart = normalize3600(base);
-    let arrive = normalize3600(depart + travels[0]);
-    const first = document.createElement("li");
-    first.textContent = `${names[0]}: 発 ${formatMinSec(depart)} → 着 ${formatMinSec(arrive)}`;
-    result.appendChild(first);
-
-    // 行軍2以降：着弾間隔ベース、常にmod 3600で循環
-    for (let i = 1; i < names.length; i++) {
-      const desiredArrive = normalize3600(arrive + gaps[i]);     // 前着弾 + 間隔
-      depart = normalize3600(desiredArrive - travels[i]);        // その着弾に間に合う出発（負もラップ）
-      arrive = normalize3600(depart + travels[i]);               // 実際の着弾（= desiredArrive と同じになる）
-      const li = document.createElement("li");
-      li.textContent = `${names[i]}: 発 ${formatMinSec(depart)} → 着 ${formatMinSec(arrive)}`;
-      result.appendChild(li);
-    }
-  });
-}
-
-const copyBtn = $("#copyBtn");
-if (copyBtn) {
-  copyBtn.addEventListener("click", async () => {
-    const resultItems = $$("#result li");
-    const copyMsg = $("#copyMsg");
-    if (!resultItems.length) {
-      if (copyMsg) copyMsg.textContent = "コピー対象がありません";
-      return;
-    }
-    const lines = resultItems.map(li => li.textContent).join("\n");
-    try {
-      await navigator.clipboard.writeText(lines);
-      if (copyMsg) {
-        copyMsg.textContent = "コピーしました";
-        setTimeout(() => (copyMsg.textContent = ""), 1500);
-      }
-    } catch {
-      if (copyMsg) copyMsg.textContent = "クリップボードに書き込めませんでした";
-    }
-  });
-}
-
-// ====== PWA: Service Worker 登録 ======
+// ====== PWA(Service Worker)登録（そのまま） ======
 if ("serviceWorker" in navigator) {
-  const isLocalhost =
-    location.hostname === "localhost" ||
-    location.hostname === "127.0.0.1";
+  const isLocalhost = location.hostname === "localhost" || location.hostname === "127.0.0.1";
   const isHttps = location.protocol === "https:";
   if (isLocalhost || isHttps) {
     navigator.serviceWorker.register("./sw.js").catch(console.warn);

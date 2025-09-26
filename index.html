@@ -3,53 +3,41 @@
 <head>
   <meta charset="utf8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>UTC 集結時間ツール (PWA)</title>
-  
+  <title>集結くん</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0d1117">
-  
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <h1>UTC 集結時間ツール</h1>
-    <p class="sub">開始時刻(UTC)＋ラリー間隔で各行軍の集結開始時刻(UTC)を出します</p>
+    <h1>集結くん</h1>
+    <p class="sub">1行軍集結時刻（UTC）を基準に、着弾間隔・集結時間・移動(秒)から各行軍の集/着を計算します</p>
   </header>
-
-  <!-- 簡易パスコードロック（必要な人だけ） -->
-  <div id="lock" class="lock hidden">
-    <div class="lock-card">
-      <h2>アクセス</h2>
-      <p>パスコードを入力してください</p>
-      <input id="passcode" type="password" placeholder="4?12桁">
-      <button id="unlockBtn">入る</button>
-      <p id="lockMsg" class="msg"></p>
-    </div>
-  </div>
 
   <main>
     <section class="card">
       <h2>基本設定</h2>
       <div class="row">
-        <label>開始時刻（UTC: 分:秒）</label>
-        <input id="startUtc" type="text" placeholder="例: 12:30">
+        <label>1行軍集結時刻（UTC）</label>
+        <select id="startMin"></select>分
+        <select id="startSec"></select>秒
         <button id="nowUtcBtn">今のUTC</button>
       </div>
       <div class="row">
         <label>行軍数</label>
-        <input id="marchCount" type="number" min="1" max="100" value="3">
-        <button id="applyCountBtn">行追加</button>
-      </div>
-      <div class="row">
-        <label>プリセット間隔</label>
-        <select id="preset">
-          <option value="0">0秒（先頭）</option>
-          <option value="30">30秒</option>
-          <option value="60">1分</option>
-          <option value="120">2分</option>
-          <option value="300">5分</option>
+        <select id="marchCount">
+          <option value="1">1</option>
+          <option value="2" selected>2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
         </select>
-        <button id="fillPresetBtn">2行目以降に適用</button>
+        <button id="applyCountBtn">行軍数変更</button>
       </div>
     </section>
 
@@ -60,8 +48,9 @@
           <tr>
             <th>#</th>
             <th>行軍名</th>
-            <th>着弾間隔(秒)※前の着弾からの間隔</th>
-            <th>移動(秒)※目的地までの所要時間</th>
+            <th>着弾間隔(秒)</th>
+            <th>移動(秒)</th>
+            <th>集結時間</th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -79,10 +68,6 @@
         <span id="copyMsg" class="msg"></span>
       </div>
     </section>
-
-    <footer>
-      <small>v0.1 ? PWA対応/オフライン対応は後段で有効化</small>
-    </footer>
   </main>
 
   <script src="app.js"></script>

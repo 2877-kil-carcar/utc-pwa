@@ -1,4 +1,4 @@
-:root { --bg:#0d1117; --card:#161b22; --fg:#c9d1d9; --acc:#58a6ff; --muted:#8b949e; }
+:root { --bg:#0d1117; --card: rgba(22, 27, 34, 0.4); --fg:#c9d1d9; --acc:#58a6ff; --muted:#8b949e; }
 * { box-sizing: border-box; }
 html,body { margin:0; padding:0; background:var(--bg); color:var(--fg); font-family: system-ui, -apple-system, sans-serif; }
 header { padding:16px 20px; border-bottom:1px solid #30363d; }
@@ -26,3 +26,11 @@ td input { width:100%; }
 .lock.hidden { display:none; }
 .lock-card { background:var(--card); border:1px solid #30363d; border-radius:10px; padding:20px; width: 320px; }
 .lock-card h2 { margin-top:0; }
+
+body {
+  background: 
+    linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.3)), /* ← 暗い透過レイヤー */
+    url("images/background.jpg") center/cover no-repeat;             /* ← 背景画像 */
+  color: var(--fg);
+  font-family: system-ui, sans-serif;
+}
