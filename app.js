@@ -201,7 +201,7 @@ $("#copyBtn")?.addEventListener("click", async () => {
     if (copyMsg) copyMsg.textContent = "コピー対象がありません";
     return;
   }
-  const lines = resultItems.map(el => el.textContent).join("\\n");
+  const lines = resultItems.map(el => el.textContent).join("\n");
   try {
     await navigator.clipboard.writeText(lines);
     if (copyMsg) {
